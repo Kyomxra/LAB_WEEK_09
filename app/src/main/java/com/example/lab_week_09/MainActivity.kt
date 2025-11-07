@@ -22,6 +22,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.lab_week_09.ui.theme.*
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.Types
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -44,15 +47,39 @@ data class Student(
     var name: String
 )
 
+fun listToJson(students: List<Student>): String {
+    val moshi = Moshi.Builder()
+        .add(KotlinJsonAdapterFactory())
+        .build()
+
+    val type = Types.newParameterizedType(List::class.java, Student::class.java)
+    val adapter = moshi.adapter<List<Student>>(type)
+
+    return adapter.toJson(students)
+}
+
+fun jsonToList(json: String): List<Student> {
+    val moshi = Moshi.Builder()
+        .add(KotlinJsonAdapterFactory())
+        .build()
+
+    val type = Types.newParameterizedType(List::class.java, Student::class.java)
+    val adapter = moshi.adapter<List<Student>>(type)
+
+    return adapter.fromJson(json) ?: emptyList()
+}
+
 @Composable
 fun App(navController: NavHostController) {
     NavHost(
         navController = navController,
         startDestination = "home"
     ) {
+
         composable("home") {
             Home { navController.navigate("resultContent/?listData=$it") }
         }
+
 
         composable(
             "resultContent/?listData={listData}",
@@ -86,13 +113,15 @@ fun Home(
         inputField,
         { input -> inputField = Student(input) },
         {
-            // PROBLEM 1 FIX: Check if input is not blank before adding
             if (inputField.name.isNotBlank()) {
                 listData.add(inputField)
                 inputField = Student("")
             }
         },
-        { navigateFromHomeToResult(listData.toList().toString()) }
+        {
+            val jsonString = listToJson(listData.toList())
+            navigateFromHomeToResult(jsonString)
+        }
     )
 }
 
@@ -155,14 +184,45 @@ fun HomeContent(
     }
 }
 
+
 @Composable
 fun ResultContent(listData: String) {
-    Column(
+    val students = remember(listData) {
+        try {
+            jsonToList(listData)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    LazyColumn(
         modifier = Modifier
-            .padding(vertical = 4.dp)
+            .padding(16.dp)
             .fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        OnBackgroundItemText(text = listData)
+        // Header
+        item {
+            OnBackgroundTitleText(text = "Student List")
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        items(students) { student ->
+            Column(
+                modifier = Modifier
+                    .padding(vertical = 8.dp)
+                    .fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                OnBackgroundItemText(text = student.name)
+            }
+        }
+
+        // Show message if list is empty
+        if (students.isEmpty()) {
+            item {
+                OnBackgroundItemText(text = "No students added yet")
+            }
+        }
     }
 }
